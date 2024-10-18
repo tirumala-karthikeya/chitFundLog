@@ -19,6 +19,9 @@ import Input from '../../../components/bootstrap/forms/Input';
 import Select from '../../../components/bootstrap/forms/Select';
 import Option from '../../../components/bootstrap/Option';
 import Spinner from '../../../components/bootstrap/Spinner';
+import PhoneVerification from '../PhoneVerification';
+import { supabase } from '../../../lib/supabase';
+import * as Yup from 'yup';
 
 const SignUpHeader: FC = () => {
 	return (
@@ -35,35 +38,54 @@ const SignUp: NextPage = () => {
 	const { darkModeStatus } = useDarkMode();
 
 	const [isLoading, setIsLoading] = useState<boolean>(false);
+	const [isPhoneVerified, setIsPhoneVerified] = useState(false);
+	const [isOtpVerified, setIsOtpVerified] = useState(false);
+	const [error, setError] = useState<string | null>(null);
 
 	const handleOnClick = useCallback(() => router.push('/'), [router]);
 
+	const handlePhoneVerified = (phoneNumber: string) => {
+		setIsPhoneVerified(true);
+		formik.setFieldValue('phoneNumber', phoneNumber);
+	};
+
+	const handleOtpVerified = async () => {
+		setIsOtpVerified(true);
+		
+		try {
+			const { data, error } = await supabase
+				.from('otp')
+				.insert({
+					phone_number: formik.values.phoneNumber,
+					role: formik.values.role,
+				});
+
+			if (error) throw error;
+
+			console.log('User data stored successfully:', data);
+			
+			router.push('/');
+		} catch (error) {
+			console.error('Error storing user data:', error);
+			setError('Failed to complete registration. Please try again.');
+		}
+	};
+
+	const validationSchema = Yup.object({
+		name: Yup.string().required('Required'),
+		surname: Yup.string().required('Required'),
+		phoneNumber: Yup.string().required('Required'),
+		role: Yup.string().oneOf(['owner', 'participant'], 'Invalid role').required('Required'),
+	});
+
 	const formik = useFormik({
 		initialValues: {
-			email: '',
-			password: '',
+			name: '',
+			surname: '',
+			phoneNumber: '',
 			role: '',
 		},
-		validate: (values) => {
-			const errors: { email?: string; password?: string; role?: string } = {};
-
-			if (!values.email) {
-				errors.email = 'Required';
-			} else if (!/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}$/i.test(values.email)) {
-				errors.email = 'Invalid email address';
-			}
-
-			if (!values.password) {
-				errors.password = 'Required';
-			}
-
-			if (!values.role) {
-				errors.role = 'Required';
-			}
-
-			return errors;
-		},
-		validateOnChange: false,
+		validationSchema,
 		onSubmit: async (values) => {
 			setIsLoading(true);
 			try {
@@ -150,31 +172,46 @@ const SignUp: NextPage = () => {
 
 								<form className='row g-4' onSubmit={formik.handleSubmit}>
 									<div className='col-12'>
-										<FormGroup id='email' isFloating label='Your email'>
+										<FormGroup id='name' isFloating label='Name'>
 											<Input
-												type='email'
-												autoComplete='email'
+												type='text'
+												autoComplete='name'
 												onChange={formik.handleChange}
 												onBlur={formik.handleBlur}
-												value={formik.values.email}
-												isValid={formik.touched.email && !formik.errors.email}
-												isTouched={formik.touched.email}
-												invalidFeedback={formik.errors.email}
+												value={formik.values.name}
+												isValid={formik.touched.name && !formik.errors.name}
+												isTouched={formik.touched.name}
+												invalidFeedback={formik.errors.name}
 												validFeedback='Looks good!'
 											/>
 										</FormGroup>
 									</div>
 									<div className='col-12'>
-										<FormGroup id='password' isFloating label='Password'>
+										<FormGroup id='surname' isFloating label='Surname'>
 											<Input
-												type='password'
-												autoComplete='new-password'
+												type='text'
+												autoComplete='surname'
 												onChange={formik.handleChange}
 												onBlur={formik.handleBlur}
-												value={formik.values.password}
-												isValid={formik.touched.password && !formik.errors.password}
-												isTouched={formik.touched.password}
-												invalidFeedback={formik.errors.password}
+												value={formik.values.surname}
+												isValid={formik.touched.surname && !formik.errors.surname}
+												isTouched={formik.touched.surname}
+												invalidFeedback={formik.errors.surname}
+												validFeedback='Looks good!'
+											/>
+										</FormGroup>
+									</div>
+									<div className='col-12'>
+										<FormGroup id='phoneNumber' isFloating label='Phone Number'>
+											<Input
+												type='tel'
+												autoComplete='tel'
+												onChange={formik.handleChange}
+												onBlur={formik.handleBlur}
+												value={formik.values.phoneNumber}
+												isValid={formik.touched.phoneNumber && !formik.errors.phoneNumber}
+												isTouched={formik.touched.phoneNumber}
+												invalidFeedback={formik.errors.phoneNumber}
 												validFeedback='Looks good!'
 											/>
 										</FormGroup>
@@ -200,9 +237,8 @@ const SignUp: NextPage = () => {
 											color='info'
 											className='w-100 py-3'
 											type='submit'
-											isDisable={isLoading || !formik.isValid}>
-											{isLoading && <Spinner isSmall inButton isGrow />}
-											Sign Up
+											isDisable={isLoading || !isPhoneVerified}>
+											{isLoading ? <Spinner isSmall inButton /> : 'Sign Up'}
 										</Button>
 									</div>
 								</form>
