@@ -1,4 +1,4 @@
-import React, { FC, useCallback, useContext, useState } from 'react';
+import React, { FC, useCallback, useContext, useState, useEffect } from 'react';
 import type { NextPage } from 'next';
 import { GetStaticProps } from 'next';
 import Head from 'next/head';
@@ -41,12 +41,37 @@ const SignUp: NextPage = () => {
 	const [isPhoneVerified, setIsPhoneVerified] = useState(false);
 	const [isOtpVerified, setIsOtpVerified] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [showOtpInput, setShowOtpInput] = useState(false);
+	const [otp, setOtp] = useState('');
+	const [initialRole, setInitialRole] = useState('');
+
+	useEffect(() => {
+		setInitialRole(localStorage.getItem('userRole') || '');
+	}, []);
 
 	const handleOnClick = useCallback(() => router.push('/'), [router]);
 
 	const handlePhoneVerified = (phoneNumber: string) => {
 		setIsPhoneVerified(true);
 		formik.setFieldValue('phoneNumber', phoneNumber);
+		setShowOtpInput(true);
+	};
+
+	const handleOtpSubmit = async () => {
+		setIsLoading(true);
+		try {
+			// Here you would typically verify the OTP with your backend
+			// For now, we'll just simulate a successful verification
+			await new Promise(resolve => setTimeout(resolve, 1000));
+			setIsOtpVerified(true);
+			setShowOtpInput(false);
+			handleOtpVerified();
+		} catch (error) {
+			console.error('Error verifying OTP:', error);
+			setError('Failed to verify OTP. Please try again.');
+		} finally {
+			setIsLoading(false);
+		}
 	};
 
 	const handleOtpVerified = async () => {
@@ -64,6 +89,9 @@ const SignUp: NextPage = () => {
 
 			console.log('User data stored successfully:', data);
 			
+			// Store role in localStorage before redirecting
+			localStorage.setItem('userRole', formik.values.role);
+			
 			router.push('/');
 		} catch (error) {
 			console.error('Error storing user data:', error);
@@ -72,19 +100,16 @@ const SignUp: NextPage = () => {
 	};
 
 	const validationSchema = Yup.object({
-		name: Yup.string().required('Required'),
-		surname: Yup.string().required('Required'),
-		phoneNumber: Yup.string().required('Required'),
-		role: Yup.string().oneOf(['owner', 'participant'], 'Invalid role').required('Required'),
+			phoneNumber: Yup.string().required('Required'),
+			role: Yup.string().oneOf(['owner', 'participant'], 'Invalid role').required('Required'),
 	});
 
 	const formik = useFormik({
 		initialValues: {
-			name: '',
-			surname: '',
 			phoneNumber: '',
-			role: '',
+			role: initialRole,
 		},
+		enableReinitialize: true,
 		validationSchema,
 		onSubmit: async (values) => {
 			setIsLoading(true);
@@ -172,49 +197,7 @@ const SignUp: NextPage = () => {
 
 								<form className='row g-4' onSubmit={formik.handleSubmit}>
 									<div className='col-12'>
-										<FormGroup id='name' isFloating label='Name'>
-											<Input
-												type='text'
-												autoComplete='name'
-												onChange={formik.handleChange}
-												onBlur={formik.handleBlur}
-												value={formik.values.name}
-												isValid={formik.touched.name && !formik.errors.name}
-												isTouched={formik.touched.name}
-												invalidFeedback={formik.errors.name}
-												validFeedback='Looks good!'
-											/>
-										</FormGroup>
-									</div>
-									<div className='col-12'>
-										<FormGroup id='surname' isFloating label='Surname'>
-											<Input
-												type='text'
-												autoComplete='surname'
-												onChange={formik.handleChange}
-												onBlur={formik.handleBlur}
-												value={formik.values.surname}
-												isValid={formik.touched.surname && !formik.errors.surname}
-												isTouched={formik.touched.surname}
-												invalidFeedback={formik.errors.surname}
-												validFeedback='Looks good!'
-											/>
-										</FormGroup>
-									</div>
-									<div className='col-12'>
-										<FormGroup id='phoneNumber' isFloating label='Phone Number'>
-											<Input
-												type='tel'
-												autoComplete='tel'
-												onChange={formik.handleChange}
-												onBlur={formik.handleBlur}
-												value={formik.values.phoneNumber}
-												isValid={formik.touched.phoneNumber && !formik.errors.phoneNumber}
-												isTouched={formik.touched.phoneNumber}
-												invalidFeedback={formik.errors.phoneNumber}
-												validFeedback='Looks good!'
-											/>
-										</FormGroup>
+										
 									</div>
 									<div className='col-12'>
 										<FormGroup id='role' isFloating label='User Role'>
@@ -233,14 +216,36 @@ const SignUp: NextPage = () => {
 										</FormGroup>
 									</div>
 									<div className='col-12'>
+										<PhoneVerification onVerified={handlePhoneVerified} />
+									</div>
+									{showOtpInput && !isOtpVerified && (
+										<div className='col-12'>
+											<FormGroup id='otp' isFloating label='Enter OTP'>
+												<Input
+													type='text'
+													value={otp}
+													onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOtp(e.target.value)}
+												/>
+											</FormGroup>
+											<Button
+												color='primary'
+												className='w-100 py-3 mt-3'
+												onClick={handleOtpSubmit}
+												isDisable={isLoading || otp.length === 0}
+											>
+												{isLoading ? <Spinner isSmall inButton /> : 'Verify OTP'}
+											</Button>
+										</div>
+									)}
+									{/* <div className='col-12'>
 										<Button
 											color='info'
 											className='w-100 py-3'
 											type='submit'
-											isDisable={isLoading || !isPhoneVerified}>
+											isDisable={isLoading || !isOtpVerified}>
 											{isLoading ? <Spinner isSmall inButton /> : 'Sign Up'}
 										</Button>
-									</div>
+									</div> */}
 								</form>
 							</CardBody>
 						</Card>
