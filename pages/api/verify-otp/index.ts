@@ -17,33 +17,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('Twilio verification result:', verificationCheck.status);
 
       if (verificationCheck.status === 'approved') {
+        // OTP is valid, update the role in the database
+        const updateData = { role: role.toLowerCase() };
+        console.log('Updating Supabase with:', updateData);
+
         const { data, error } = await supabase
           .from('otp')
-          .select('role')
-          .match({ mobile_number: phoneNumber })
-          .single();
+          .update(updateData)
+          .match({ mobile_number: phoneNumber });
 
         if (error) {
-          console.error('Supabase fetch error:', error);
-          return res.status(500).json({ error: 'Failed to fetch role from database', details: error });
+          console.error('Supabase update error:', error);
+          return res.status(500).json({ error: 'Failed to update role in database', details: error });
         }
 
-        if (data?.role !== role) {
-          return res.status(400).json({ error: 'Role mismatch' });
-        }
+        console.log('Supabase update result:', data);
 
-        console.log('Verified role from Supabase:', data?.role);
-
-        return res.status(200).json({ message: 'OTP verified successfully', role: data?.role });
+        return res.status(200).json({ message: 'OTP verified successfully and role updated', role: role.toLowerCase() });
       } else {
+        // OTP is invalid (unchanged)
         console.error('OTP verification failed:', verificationCheck.status);
         return res.status(400).json({ error: 'Invalid or expired OTP' });
       }
     } catch (error) {
+      // Error handling (unchanged)
       console.error('Error verifying OTP:', error);
       return res.status(500).json({ error: 'Failed to verify OTP', details: error instanceof Error ? error.message : String(error) });
     }
   } else {
+    // Method not allowed handling (unchanged)
     res.setHeader('Allow', ['POST']);
     return res.status(405).end(`Method ${req.method} Not Allowed`);
   }

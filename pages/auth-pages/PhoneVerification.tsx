@@ -7,7 +7,6 @@ import Button from '../../components/bootstrap/Button';
 import Spinner from '../../components/bootstrap/Spinner';
 import Alert from '../../components/bootstrap/Alert';
 import { useRouter } from 'next/router';
-import Select from '../../components/bootstrap/forms/Select';
 
 interface PhoneVerificationProps {
   onVerified: (phoneNumber: string) => void;
@@ -23,28 +22,35 @@ const PhoneVerification: React.FC<PhoneVerificationProps> = ({ onVerified }) => 
     const { phoneNumber: urlPhoneNumber } = router.query;
     if (urlPhoneNumber && typeof urlPhoneNumber === 'string') {
       phoneFormik.setFieldValue('phoneNumber', urlPhoneNumber);
-      handleSendOtp(urlPhoneNumber, phoneFormik.values.role);
+      handleSendOtp(urlPhoneNumber);
     }
   }, [router.query]);
 
   const phoneFormik = useFormik({
     initialValues: {
       phoneNumber: '',
-      role: '',
     },
     validationSchema: Yup.object({
       phoneNumber: Yup.string()
         .matches(/^\+?[1-9]\d{1,14}$/, 'Please enter a valid phone number')
         .required('Phone number is required'),
-      role: Yup.string()
-        .oneOf(['owner', 'participant'], 'Invalid role')
-        .required('Role is required'),
     }),
     onSubmit: async (values) => {
       setIsLoading(true);
       setError(null);
       try {
-        await handleSendOtp(values.phoneNumber, values.role);
+        const response = await fetch('/api/send-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phoneNumber: values.phoneNumber }),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to send OTP');
+        }
+        
+        setStep('otp');
       } catch (error) {
         console.error('Error sending OTP:', error);
         setError(error instanceof Error ? error.message : 'Failed to send OTP. Please try again.');
@@ -70,11 +76,7 @@ const PhoneVerification: React.FC<PhoneVerificationProps> = ({ onVerified }) => 
         const response = await fetch('/api/verify-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            phoneNumber: phoneFormik.values.phoneNumber, 
-            otp: values.otp,
-            role: phoneFormik.values.role
-          }),
+          body: JSON.stringify({ phoneNumber: phoneFormik.values.phoneNumber, otp: values.otp }),
         });
         
         if (!response.ok) {
@@ -83,7 +85,6 @@ const PhoneVerification: React.FC<PhoneVerificationProps> = ({ onVerified }) => 
         }
         
         console.log('OTP verified successfully');
-        localStorage.setItem('userRole', phoneFormik.values.role);
         onVerified(phoneFormik.values.phoneNumber);
         
         // Use router.push as a Promise
@@ -99,36 +100,25 @@ const PhoneVerification: React.FC<PhoneVerificationProps> = ({ onVerified }) => 
     },
   });
 
-  const handleSendOtp = async (number: string, role: string) => {
+  const handleSendOtp = async (number: string) => {
     setIsLoading(true);
     setError(null);
     try {
       const response = await fetch('/api/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber: number, role: role }),
+        body: JSON.stringify({ phoneNumber: number }),
       });
       
       if (!response.ok) {
         const errorData = await response.json();
-        if (response.status === 429) {
-          throw new Error('Too many attempts. Please try again later.');
-        } else if (errorData.error) {
-          throw new Error(errorData.error);
-        } else {
-          throw new Error(`Failed to send OTP. Status: ${response.status}`);
-        }
+        throw new Error(errorData.error || 'Failed to send OTP');
       }
       
       setStep('otp');
     } catch (error) {
       console.error('Error sending OTP:', error);
-      if (error instanceof Error) {
-        setError(error.message);
-      } else {
-        setError('An unexpected error occurred. Please try again.');
-      }
-      throw error;
+      setError(error instanceof Error ? error.message : 'Failed to send OTP. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -151,18 +141,6 @@ const PhoneVerification: React.FC<PhoneVerificationProps> = ({ onVerified }) => 
               isValid={phoneFormik.isValid}
               isTouched={phoneFormik.touched.phoneNumber}
               invalidFeedback={phoneFormik.errors.phoneNumber}
-            />
-          </FormGroup>
-          <FormGroup id="role" isFloating label="Role">
-            <Select
-              ariaLabel="User role"
-              placeholder="Select role"
-              {...phoneFormik.getFieldProps('role')}
-              isValid={phoneFormik.isValid}
-              isTouched={phoneFormik.touched.role}
-              invalidFeedback={
-                phoneFormik.errors.role
-              }
             />
           </FormGroup>
           <Button

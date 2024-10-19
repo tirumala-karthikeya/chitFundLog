@@ -46,16 +46,16 @@ const SignUp: NextPage = () => {
 
 	useEffect(() => {
 		setIsClient(true);
+		// Retrieve the role from localStorage when the component mounts
 		const storedRole = localStorage.getItem('selectedRole');
 		if (storedRole) {
 			setSelectedRole(storedRole);
 		}
 	}, []);
 
-	// Updated validation schema
 	const validationSchema = Yup.object({
 		phoneNumber: Yup.string().required('Required'),
-		role: Yup.string().oneOf(['owner', 'participant'], 'Invalid role').required('Role is required'),
+		role: Yup.string().oneOf(['owner', 'participant', 'Owner', 'Participant'], 'Invalid role').required('Required'),
 		otp: Yup.string().when('$showOtpInput', {
 			is: true,
 			then: (schema) => schema.required('OTP is required'),
@@ -75,12 +75,15 @@ const SignUp: NextPage = () => {
 			setError(null);
 			try {
 				if (!showOtpInput) {
+					console.log('Submitting form with role:', values.role);
 					await requestOtp(values.phoneNumber, values.role);
 					setShowOtpInput(true);
 					setSelectedRole(values.role);
 					localStorage.setItem('selectedRole', values.role);
+					console.log('Role after OTP request:', values.role);
 				} else {
-					await verifyOtpAndSignUp(values);
+					console.log('Verifying OTP with role:', selectedRole);
+					await verifyOtpAndSignUp({ ...values, role: selectedRole });
 				}
 			} catch (error) {
 				console.error('Error during sign-up:', error);
@@ -91,7 +94,6 @@ const SignUp: NextPage = () => {
 		},
 	});
 
-	// Updated requestOtp function
 	const requestOtp = async (phoneNumber: string, role: string) => {
 		console.log('Requesting OTP for:', phoneNumber, 'Role:', role);
 		const response = await fetch('/api/send-otp', {
@@ -107,15 +109,16 @@ const SignUp: NextPage = () => {
 		console.log('OTP request response:', responseData);
 	};
 
-	// Updated verifyOtpAndSignUp function
 	const verifyOtpAndSignUp = async (values: typeof formik.values) => {
 		console.log('Verifying OTP and signing up:', values);
+		console.log('Selected role before API call:', selectedRole);  // Add this line
 		const response = await fetch('/api/verify-otp', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
 				phoneNumber: values.phoneNumber,
 				otp: values.otp,
+				role: selectedRole.toLowerCase(),  // Use selectedRole instead of values.role
 			}),
 		});
 		if (!response.ok) {
@@ -126,8 +129,8 @@ const SignUp: NextPage = () => {
 		const responseData = await response.json();
 		console.log('Verification response:', responseData);
 
-		console.log('Sign-up successful. Role:', selectedRole);
-		localStorage.setItem('userRole', selectedRole);
+		console.log('Sign-up successful. Role:', responseData.role);
+		localStorage.setItem('userRole', responseData.role);
 		router.push('/');
 	};
 
@@ -204,10 +207,10 @@ const SignUp: NextPage = () => {
 														formik.handleChange(e);
 														setSelectedRole(selectedValue);
 														localStorage.setItem('selectedRole', selectedValue);
-														console.log('Role selected:', selectedValue);  
+														console.log('Role selected:', selectedValue);  // Add this line
 													}}
 													onBlur={formik.handleBlur}
-													value={formik.values.role}
+													value={selectedRole || formik.values.role}
 													name='role'
 													isValid={formik.touched.role && !formik.errors.role}
 													isTouched={formik.touched.role}
@@ -216,7 +219,7 @@ const SignUp: NextPage = () => {
 												>
 													<Option value=''>Choose...</Option>
 													<Option value='owner'>Owner</Option>
-														<Option value='participant'>Participant</Option>
+													<Option value='participant'>Participant</Option>
 												</Select>
 											</FormGroup>
 										</div>
