@@ -1,41 +1,54 @@
-// pages/api/send-otp.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { supabase } from '../../../lib/supabase';
 import { twilioClient } from '../../../lib/twillio';
 
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'POST') {
-    const { phoneNumber } = req.body;
+    const { phoneNumber, role } = req.body;
+    console.log('Received OTP request:', { phoneNumber, role });
 
     try {
-      // Generate OTP
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       
-      // Save OTP to Supabase
-      const { data, error } = await supabase
+      const insertData = {
+        mobile_number: phoneNumber,
+        otp: otp,
+        role: role.toLowerCase(),
+        created_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // OTP expires in 10 minutes
+      };
+      
+      console.log('Inserting data into Supabase:', insertData);
+
+      const { data, error: supabaseError } = await supabase
         .from('otp')
-        .insert({
-          mobile_number: phoneNumber,
-          otp: otp,
-          expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // OTP expires in 10 minutes
-        });
+        .insert(insertData);
 
-      if (error) throw error;
+      if (supabaseError) {
+        console.error('Supabase error:', supabaseError);
+        return res.status(500).json({ error: 'Failed to save OTP to database', details: supabaseError });
+      }
 
-      // Send OTP via Twilio Verify
-      const twilioVerifySid = process.env.TWILIO_VERIFY_SID as string;
-      await twilioClient.verify.v2.services(twilioVerifySid)
+      console.log('OTP and role saved to Supabase:', data);
+
+      const twilioVerifySid = process.env.TWILIO_VERIFY_SID;
+      if (!twilioVerifySid) {
+        throw new Error('TWILIO_VERIFY_SID is not set');
+      }
+
+      const twilioResponse = await twilioClient.verify.v2.services(twilioVerifySid)
         .verifications
         .create({
           to: phoneNumber,
           channel: 'sms',
         });
 
-      res.status(200).json({ message: 'OTP sent successfully' });
+      console.log('Twilio response:', twilioResponse);
+
+      res.status(200).json({ message: 'OTP sent successfully', role: role.toLowerCase() });
     } catch (error) {
       console.error('Error sending OTP:', error);
-      res.status(500).json({ error: 'Failed to send OTP' });
+      res.status(500).json({ error: 'Failed to send OTP', details: error instanceof Error ? error.message : String(error) });
     }
   } else {
     res.setHeader('Allow', ['POST']);

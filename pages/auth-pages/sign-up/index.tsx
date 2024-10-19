@@ -1,4 +1,4 @@
-import React, { FC, useCallback, useContext, useState } from 'react';
+import React, { FC, useCallback, useContext, useState, useEffect } from 'react';
 import type { NextPage } from 'next';
 import { GetStaticProps } from 'next';
 import Head from 'next/head';
@@ -39,228 +39,248 @@ const SignUp: NextPage = () => {
 
 	const [isLoading, setIsLoading] = useState<boolean>(false);
 	const [isPhoneVerified, setIsPhoneVerified] = useState(false);
-	const [isOtpVerified, setIsOtpVerified] = useState(false);
+	const [showOtpInput, setShowOtpInput] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [selectedRole, setSelectedRole] = useState('');
+	const [isClient, setIsClient] = useState(false);
 
-	const handleOnClick = useCallback(() => router.push('/'), [router]);
-
-	const handlePhoneVerified = (phoneNumber: string) => {
-		setIsPhoneVerified(true);
-		formik.setFieldValue('phoneNumber', phoneNumber);
-	};
-
-	const handleOtpVerified = async () => {
-		setIsOtpVerified(true);
-		
-		try {
-			const { data, error } = await supabase
-				.from('otp')
-				.insert({
-					phone_number: formik.values.phoneNumber,
-					role: formik.values.role,
-				});
-
-			if (error) throw error;
-
-			console.log('User data stored successfully:', data);
-			
-			router.push('/');
-		} catch (error) {
-			console.error('Error storing user data:', error);
-			setError('Failed to complete registration. Please try again.');
+	useEffect(() => {
+		setIsClient(true);
+		const storedRole = localStorage.getItem('selectedRole');
+		if (storedRole) {
+			setSelectedRole(storedRole);
 		}
-	};
+	}, []);
 
+	// Updated validation schema
 	const validationSchema = Yup.object({
-		name: Yup.string().required('Required'),
-		surname: Yup.string().required('Required'),
 		phoneNumber: Yup.string().required('Required'),
-		role: Yup.string().oneOf(['owner', 'participant'], 'Invalid role').required('Required'),
+		role: Yup.string().oneOf(['owner', 'participant'], 'Invalid role').required('Role is required'),
+		otp: Yup.string().when('$showOtpInput', {
+			is: true,
+			then: (schema) => schema.required('OTP is required'),
+			otherwise: (schema) => schema,
+		}),
 	});
 
 	const formik = useFormik({
 		initialValues: {
-			name: '',
-			surname: '',
 			phoneNumber: '',
 			role: '',
+			otp: '',
 		},
 		validationSchema,
 		onSubmit: async (values) => {
 			setIsLoading(true);
+			setError(null);
 			try {
-				const response = await fetch('/api/auth/signup', {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify(values),
-				});
-
-				if (response.ok) {
-					const data = await response.json();
-					if (setUser) {
-						setUser(data.email);
-					}
-					handleOnClick(); // Redirect to home page
+				if (!showOtpInput) {
+					await requestOtp(values.phoneNumber, values.role);
+					setShowOtpInput(true);
+					setSelectedRole(values.role);
+					localStorage.setItem('selectedRole', values.role);
 				} else {
-					// Handle error
-					const errorData = await response.json();
-					console.error('Signup failed:', errorData.error);
+					await verifyOtpAndSignUp(values);
 				}
 			} catch (error) {
-				console.error('Error during signup:', error);
-				// Handle network errors or other unexpected issues
+				console.error('Error during sign-up:', error);
+				setError('Failed to complete sign-up. Please try again.');
 			} finally {
 				setIsLoading(false);
 			}
 		},
 	});
 
+	// Updated requestOtp function
+	const requestOtp = async (phoneNumber: string, role: string) => {
+		console.log('Requesting OTP for:', phoneNumber, 'Role:', role);
+		const response = await fetch('/api/send-otp', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ phoneNumber, role }),
+		});
+		if (!response.ok) {
+			const errorData = await response.json();
+			throw new Error(`Failed to send OTP: ${errorData.error}`);
+		}
+		const responseData = await response.json();
+		console.log('OTP request response:', responseData);
+	};
+
+	// Updated verifyOtpAndSignUp function
+	const verifyOtpAndSignUp = async (values: typeof formik.values) => {
+		console.log('Verifying OTP and signing up:', values);
+		const response = await fetch('/api/verify-otp', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				phoneNumber: values.phoneNumber,
+				otp: values.otp,
+			}),
+		});
+		if (!response.ok) {
+			const errorData = await response.json();
+			throw new Error(`Failed to verify OTP: ${errorData.error}`);
+		}
+
+		const responseData = await response.json();
+		console.log('Verification response:', responseData);
+
+		console.log('Sign-up successful. Role:', selectedRole);
+		localStorage.setItem('userRole', selectedRole);
+		router.push('/');
+	};
+
+	const handlePhoneVerified = (phoneNumber: string) => {
+		setIsPhoneVerified(true);
+		formik.setFieldValue('phoneNumber', phoneNumber);
+	};
+
+	if (!isClient) {
+		return null; // or a loading spinner
+	}
+
 	return (
-		<PageWrapper isProtected={false} className='bg-light'>
-			<Head>
-				<title>Sign Up</title>
-			</Head>
-			<Page className='p-0'>
-				<div className='row h-100 align-items-center justify-content-center'>
-					<div className='col-xl-4 col-lg-6 col-md-8 shadow-3d-container'>
-						<Card className='shadow-3d-dark' data-tour='signup-page'>
-							<CardBody>
-								<div className='text-center my-5'>
-									<Link
-										href='/'
-										className={classNames(
-											'text-decoration-none  fw-bold display-2',
-											{
-												'text-dark': !darkModeStatus,
-												'text-light': darkModeStatus,
-											},
-										)}>
-										<Logo width={200} />
-									</Link>
-								</div>
-								<div
-									className={classNames('rounded-3', {
-										'bg-l10-dark': !darkModeStatus,
-										'bg-dark': darkModeStatus,
-									})}>
-									<div className='row row-cols-2 g-3 pb-3 px-3 mt-0'>
-										<div className='col'>
+			<PageWrapper isProtected={false} className='bg-light'>
+				<Head>
+					<title>Sign Up</title>
+				</Head>
+				<Page className='p-0'>
+					<div className='row h-100 align-items-center justify-content-center'>
+						<div className='col-xl-4 col-lg-6 col-md-8 shadow-3d-container'>
+							<Card className='shadow-3d-dark' data-tour='signup-page'>
+								<CardBody>
+									<div className='text-center my-5'>
+										<Link
+											href='/'
+											className={classNames(
+												'text-decoration-none  fw-bold display-2',
+												{
+													'text-dark': !darkModeStatus,
+													'text-light': darkModeStatus,
+												},
+											)}>
+											<Logo width={200} />
+										</Link>
+									</div>
+									<div
+										className={classNames('rounded-3', {
+											'bg-l10-dark': !darkModeStatus,
+											'bg-dark': darkModeStatus,
+										})}>
+										<div className='row row-cols-2 g-3 pb-3 px-3 mt-0'>
+											<div className='col'>
+												<Button
+													color={darkModeStatus ? 'light' : 'dark'}
+													isLight
+													className='rounded-1 w-100'
+													size='lg'
+													onClick={() => router.push('/auth-pages/login')}>
+													Login
+												</Button>
+											</div>
+											<div className='col'>
+												<Button
+													color={darkModeStatus ? 'light' : 'dark'}
+													className='rounded-1 w-100'
+													size='lg'
+													onClick={() => router.push('/auth-pages/sign-up')}>
+													Sign Up
+												</Button>
+											</div>
+										</div>
+									</div>
+
+									<SignUpHeader />
+
+									<form className='row g-4' onSubmit={formik.handleSubmit}>
+										<div className='col-12'>
+											<FormGroup id='role' isFloating label='User Role'>
+												<Select
+													ariaLabel='User role'
+													placeholder='Select role'
+													onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+														const selectedValue = e.target.value;
+														formik.handleChange(e);
+														setSelectedRole(selectedValue);
+														localStorage.setItem('selectedRole', selectedValue);
+														console.log('Role selected:', selectedValue);  
+													}}
+													onBlur={formik.handleBlur}
+													value={formik.values.role}
+													name='role'
+													isValid={formik.touched.role && !formik.errors.role}
+													isTouched={formik.touched.role}
+													invalidFeedback={formik.errors.role}
+													disabled={showOtpInput}
+												>
+													<Option value=''>Choose...</Option>
+													<Option value='owner'>Owner</Option>
+														<Option value='participant'>Participant</Option>
+												</Select>
+											</FormGroup>
+										</div>
+										<div className='col-12'>
+											<PhoneVerification onVerified={handlePhoneVerified} />
+										</div>
+										{showOtpInput && (
+											<div className='col-12'>
+												<FormGroup id='otp' isFloating label='Enter OTP'>
+													<Input
+														type='text'
+														name='otp'
+														value={formik.values.otp}
+														onChange={formik.handleChange}
+														onBlur={formik.handleBlur}
+														isValid={formik.touched.otp && !formik.errors.otp}
+														isTouched={formik.touched.otp}
+														invalidFeedback={formik.errors.otp}
+													/>
+												</FormGroup>
+											</div>
+										)}
+										{error && (
+											<div className='col-12'>
+												<div className='alert alert-danger' role='alert'>
+													{error}
+													{error === 'User already exists. Please log in instead.' && (
+														<>
+															{' '}
+															<Link href='/auth-pages/login'>Click here to log in</Link>.
+														</>
+													)}
+												</div>
+											</div>
+										)}
+										<div className='col-12'>
 											<Button
-												color={darkModeStatus ? 'light' : 'dark'}
-												isLight
-												className='rounded-1 w-100'
-												size='lg'
-												onClick={() => router.push('/auth-pages/login')}>
-												Login
+												color='info'
+												className='w-100 py-3'
+												type='submit'
+												isDisable={isLoading || !isPhoneVerified || !selectedRole}>
+												{isLoading ? <Spinner isSmall inButton /> : (showOtpInput ? 'Verify OTP' : 'Request OTP')}
 											</Button>
 										</div>
-										<div className='col'>
-											<Button
-												color={darkModeStatus ? 'light' : 'dark'}
-												className='rounded-1 w-100'
-												size='lg'
-												onClick={() => router.push('/auth-pages/sign-up')}>
-												Sign Up
-											</Button>
-										</div>
-									</div>
-								</div>
-
-								<SignUpHeader />
-
-								<form className='row g-4' onSubmit={formik.handleSubmit}>
-									<div className='col-12'>
-										<FormGroup id='name' isFloating label='Name'>
-											<Input
-												type='text'
-												autoComplete='name'
-												onChange={formik.handleChange}
-												onBlur={formik.handleBlur}
-												value={formik.values.name}
-												isValid={formik.touched.name && !formik.errors.name}
-												isTouched={formik.touched.name}
-												invalidFeedback={formik.errors.name}
-												validFeedback='Looks good!'
-											/>
-										</FormGroup>
-									</div>
-									<div className='col-12'>
-										<FormGroup id='surname' isFloating label='Surname'>
-											<Input
-												type='text'
-												autoComplete='surname'
-												onChange={formik.handleChange}
-												onBlur={formik.handleBlur}
-												value={formik.values.surname}
-												isValid={formik.touched.surname && !formik.errors.surname}
-												isTouched={formik.touched.surname}
-												invalidFeedback={formik.errors.surname}
-												validFeedback='Looks good!'
-											/>
-										</FormGroup>
-									</div>
-									<div className='col-12'>
-										<FormGroup id='phoneNumber' isFloating label='Phone Number'>
-											<Input
-												type='tel'
-												autoComplete='tel'
-												onChange={formik.handleChange}
-												onBlur={formik.handleBlur}
-												value={formik.values.phoneNumber}
-												isValid={formik.touched.phoneNumber && !formik.errors.phoneNumber}
-												isTouched={formik.touched.phoneNumber}
-												invalidFeedback={formik.errors.phoneNumber}
-												validFeedback='Looks good!'
-											/>
-										</FormGroup>
-									</div>
-									<div className='col-12'>
-										<FormGroup id='role' isFloating label='User Role'>
-											<Select
-												ariaLabel='User role'
-												onChange={formik.handleChange}
-												onBlur={formik.handleBlur}
-												value={formik.values.role}
-												isValid={formik.touched.role && !formik.errors.role}
-												isTouched={formik.touched.role}
-												invalidFeedback={formik.errors.role}>
-												<Option value=''>Choose...</Option>
-												<Option value='owner'>Owner</Option>
-												<Option value='participant'>Participant</Option>
-											</Select>
-										</FormGroup>
-									</div>
-									<div className='col-12'>
-										<Button
-											color='info'
-											className='w-100 py-3'
-											type='submit'
-											isDisable={isLoading || !isPhoneVerified}>
-											{isLoading ? <Spinner isSmall inButton /> : 'Sign Up'}
-										</Button>
-									</div>
-								</form>
-							</CardBody>
-						</Card>
-						<div className='text-center'>
-							<Link
-								href='/'
-								className={classNames('text-decoration-none me-3 link-dark')}>
-								Privacy policy
-							</Link>
-							<Link
-								href='/'
-								className={classNames('link-dark text-decoration-none')}>
-								Terms of use
-							</Link>
+									</form>
+								</CardBody>
+							</Card>
+							<div className='text-center'>
+								<Link
+									href='/'
+									className={classNames('text-decoration-none me-3 link-dark')}>
+									Privacy policy
+								</Link>
+								<Link
+									href='/'
+									className={classNames('link-dark text-decoration-none')}>
+									Terms of use
+								</Link>
+							</div>
 						</div>
 					</div>
-				</div>
-			</Page>
-		</PageWrapper>
-	);
+				</Page>
+			</PageWrapper>
+		);
 };
 
 export const getStaticProps: GetStaticProps = async ({ locale }) => ({
