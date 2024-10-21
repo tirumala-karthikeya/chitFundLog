@@ -143,7 +143,6 @@ const PhoneVerification: React.FC<PhoneVerificationProps> = ({ onVerified, selec
       console.error('Error sending OTP:', error);
       setError(error instanceof Error ? error.message : 'Failed to send OTP. Please try again.');
       // Keep the step as 'phone' so the user can try again
-      setStep('phone');
     }
   };
 
@@ -210,7 +209,6 @@ const PhoneVerification: React.FC<PhoneVerificationProps> = ({ onVerified, selec
         <form onSubmit={(e) => {
           e.preventDefault();
           otpFormik.handleSubmit(e);
-          return false;
         }}>
           <FormGroup id="otp" isFloating label="OTP">
             <Input

@@ -370,7 +370,8 @@ NavigationTitle.defaultProps = {
 	className: undefined,
 };
 
-interface INavigationProps {
+// Add this line near the top of the file, with other interface declarations
+export interface INavigationProps {
 	horizontal?: boolean;
 	menu: {
 		[key: string]: {
@@ -393,6 +394,7 @@ interface INavigationProps {
 	id: string;
 	className?: string;
 }
+
 const Navigation = forwardRef<HTMLElement, INavigationProps>(
 	({ menu, horizontal, id, className, ...props }, ref) => {
 		const [activeItem, setActiveItem] = useState(undefined);

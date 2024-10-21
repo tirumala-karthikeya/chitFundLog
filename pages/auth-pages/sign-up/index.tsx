@@ -92,7 +92,7 @@ const SignUp: NextPage = () => {
 				}
 			} catch (error) {
 				console.error('Error during sign-up:', error);
-				setError('Failed to complete sign-up. Please try again.');
+				setError(error instanceof Error ? error.message : 'Failed to complete sign-up. Please try again.');
 			} finally {
 				setIsLoading(false);
 			}
@@ -131,7 +131,7 @@ const SignUp: NextPage = () => {
 
 			if (!response.ok) {
 				const errorData = await response.json();
-				throw new Error(`Failed to verify OTP: ${errorData.error}`);
+				throw new Error(errorData.error || 'Failed to verify OTP');
 			}
 
 			const responseData = await response.json();
@@ -141,6 +141,9 @@ const SignUp: NextPage = () => {
 			localStorage.setItem('userRole', responseData.role);
 			localStorage.setItem('phoneNumber', values.phoneNumber);
 			
+			if (setUser) {
+				setUser({ role: responseData.role, phoneNumber: values.phoneNumber });
+			}
 			router.push('/');
 		} catch (error) {
 			console.error('Error during verification:', error);

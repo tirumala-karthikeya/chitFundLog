@@ -35,6 +35,7 @@ const Login: NextPage = () => {
 	const { darkModeStatus } = useDarkMode();
 	const [isPhoneVerified, setIsPhoneVerified] = useState(false);
 	const [isLogin, setIsLogin] = useState(true);
+	const [selectedRole, setSelectedRole] = useState('user');
 
 	const handleOnClick = useCallback(() => router.push('/'), [router]);
 
@@ -125,7 +126,10 @@ const Login: NextPage = () => {
 								<form className='row g-4 mt-3'>
 									<div className='col-12'>
 										{!isPhoneVerified ? (
-											<PhoneVerification onVerified={handlePhoneVerified} />
+											<PhoneVerification 
+												onVerified={handlePhoneVerified} 
+												selectedRole={selectedRole}
+											/>
 										) : (
 											<FormGroup id='phoneNumber' isFloating label='Phone Number'>
 												<Input
