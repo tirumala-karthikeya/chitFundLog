@@ -10,13 +10,20 @@ import { useRouter } from 'next/router';
 
 interface PhoneVerificationProps {
   onVerified: (phoneNumber: string) => void;
+  selectedRole: string;
 }
 
-const PhoneVerification: React.FC<PhoneVerificationProps> = ({ onVerified }) => {
+const PhoneVerification: React.FC<PhoneVerificationProps> = ({ onVerified, selectedRole }) => {
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    if (Object.keys(router.query).length > 0) {
+      router.replace('/auth-pages/sign-up', undefined, { shallow: true });
+    }
+  }, []);
 
   useEffect(() => {
     const { phoneNumber: urlPhoneNumber } = router.query;
@@ -36,21 +43,14 @@ const PhoneVerification: React.FC<PhoneVerificationProps> = ({ onVerified }) => 
         .required('Phone number is required'),
     }),
     onSubmit: async (values) => {
+      if (!selectedRole) {
+        setError('Please select a role before proceeding');
+        return;
+      }
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch('/api/send-otp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phoneNumber: values.phoneNumber }),
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to send OTP');
-        }
-        
-        setStep('otp');
+        await handleSendOtp(values.phoneNumber);
       } catch (error) {
         console.error('Error sending OTP:', error);
         setError(error instanceof Error ? error.message : 'Failed to send OTP. Please try again.');
@@ -69,14 +69,22 @@ const PhoneVerification: React.FC<PhoneVerificationProps> = ({ onVerified }) => 
         .matches(/^\d{6}$/, 'OTP must be 6 digits')
         .required('OTP is required'),
     }),
-    onSubmit: async (values, { setSubmitting }) => {
+    onSubmit: async (values) => {
+      if (!selectedRole) {
+        setError('Role is required for verification');
+        return;
+      }
       setIsLoading(true);
       setError(null);
       try {
         const response = await fetch('/api/verify-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phoneNumber: phoneFormik.values.phoneNumber, otp: values.otp }),
+          body: JSON.stringify({
+            phoneNumber: phoneFormik.values.phoneNumber,
+            otp: values.otp,
+            role: selectedRole.toLowerCase()
+          }),
         });
         
         if (!response.ok) {
@@ -84,30 +92,45 @@ const PhoneVerification: React.FC<PhoneVerificationProps> = ({ onVerified }) => 
           throw new Error(errorData.error || 'Invalid OTP');
         }
         
-        console.log('OTP verified successfully');
-        onVerified(phoneFormik.values.phoneNumber);
+        const data = await response.json();
         
-        // Use router.push as a Promise
-        await router.push('/');
-        console.log('Navigation to /');
+        if (!response.ok) {
+          throw new Error(data.error || 'Invalid OTP');
+        }
+
+        // Store user data in localStorage
+        localStorage.setItem('userRole', data.role);
+        localStorage.setItem('userPhone', phoneFormik.values.phoneNumber);
+        localStorage.setItem('isVerified', 'true');
+        
+        onVerified(phoneFormik.values.phoneNumber);
+
+        // Simplified navigation
+        router.push('/');
+
+        return false; // Prevent default form submission
       } catch (error) {
         console.error('Error verifying OTP:', error);
         setError(error instanceof Error ? error.message : 'Invalid OTP. Please try again.');
       } finally {
         setIsLoading(false);
-        setSubmitting(false);
       }
     },
   });
 
   const handleSendOtp = async (number: string) => {
-    setIsLoading(true);
-    setError(null);
+    if (!selectedRole) {
+      throw new Error('Please select a role before requesting OTP');
+    }
+    console.log('Sending OTP request with:', { number, role: selectedRole });
     try {
       const response = await fetch('/api/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber: number }),
+        body: JSON.stringify({ 
+          phoneNumber: number, 
+          role: selectedRole.toLowerCase() 
+        }),
       });
       
       if (!response.ok) {
@@ -119,9 +142,37 @@ const PhoneVerification: React.FC<PhoneVerificationProps> = ({ onVerified }) => 
     } catch (error) {
       console.error('Error sending OTP:', error);
       setError(error instanceof Error ? error.message : 'Failed to send OTP. Please try again.');
-    } finally {
-      setIsLoading(false);
+      // Keep the step as 'phone' so the user can try again
+      setStep('phone');
     }
+  };
+
+  // New function to handle verification success
+  const handleVerificationSuccess = async (phoneNumber: string, role: string) => {
+    try {
+      // Store user data
+      localStorage.setItem('userRole', role);
+      localStorage.setItem('userPhone', phoneNumber);
+      localStorage.setItem('isVerified', 'true');
+      
+      // Call the onVerified callback
+      onVerified(phoneNumber);
+      
+      // Perform navigation
+      await router.push('/');
+      
+      // Force a page reload after navigation
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Navigation error:', error);
+      setError('Failed to navigate after verification');
+    }
+  };
+
+  // New function to prevent form submission from adding to URL
+  const handleFormSubmit = async (e: React.FormEvent, formik: any) => {
+    e.preventDefault();
+    await formik.submitForm();
   };
 
   return (
@@ -132,7 +183,10 @@ const PhoneVerification: React.FC<PhoneVerificationProps> = ({ onVerified }) => 
         </Alert>
       )}
       {step === 'phone' ? (
-        <form onSubmit={phoneFormik.handleSubmit}>
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          phoneFormik.handleSubmit(e);
+        }}>
           <FormGroup id="phoneNumber" isFloating label="Phone Number">
             <Input
               type="tel"
@@ -147,7 +201,7 @@ const PhoneVerification: React.FC<PhoneVerificationProps> = ({ onVerified }) => 
             type="submit"
             color="primary"
             className="w-100 py-3"
-            isDisable={isLoading || !phoneFormik.isValid}
+            isDisable={isLoading || !phoneFormik.isValid || !selectedRole}
           >
             {isLoading ? <Spinner isSmall inButton isGrow /> : 'Send OTP'}
           </Button>
@@ -155,7 +209,8 @@ const PhoneVerification: React.FC<PhoneVerificationProps> = ({ onVerified }) => 
       ) : (
         <form onSubmit={(e) => {
           e.preventDefault();
-          otpFormik.handleSubmit();
+          otpFormik.handleSubmit(e);
+          return false;
         }}>
           <FormGroup id="otp" isFloating label="OTP">
             <Input
@@ -172,17 +227,16 @@ const PhoneVerification: React.FC<PhoneVerificationProps> = ({ onVerified }) => 
             color="primary"
             className="w-100 py-3"
             isDisable={isLoading || !otpFormik.isValid}
-            onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-              e.preventDefault();
-              otpFormik.handleSubmit();
-            }}
           >
             {isLoading ? <Spinner isSmall inButton isGrow /> : 'Verify OTP'}
           </Button>
           <Button
             color="link"
             className="w-100 mt-3"
-            onClick={() => setStep('phone')}
+            onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+              e.preventDefault();
+              setStep('phone');
+            }}
           >
             Change Phone Number
           </Button>

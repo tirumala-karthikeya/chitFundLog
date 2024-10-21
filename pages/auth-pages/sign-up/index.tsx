@@ -46,12 +46,17 @@ const SignUp: NextPage = () => {
 
 	useEffect(() => {
 		setIsClient(true);
-		// Retrieve the role from localStorage when the component mounts
 		const storedRole = localStorage.getItem('selectedRole');
 		if (storedRole) {
 			setSelectedRole(storedRole);
 		}
-	}, []);
+
+		// Check if user is already verified
+		const userRole = localStorage.getItem('userRole');
+		if (userRole) {
+			router.replace('/');
+		}
+	}, [router]);
 
 	const validationSchema = Yup.object({
 		phoneNumber: Yup.string().required('Required'),
@@ -111,27 +116,36 @@ const SignUp: NextPage = () => {
 
 	const verifyOtpAndSignUp = async (values: typeof formik.values) => {
 		console.log('Verifying OTP and signing up:', values);
-		console.log('Selected role before API call:', selectedRole);  // Add this line
-		const response = await fetch('/api/verify-otp', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				phoneNumber: values.phoneNumber,
-				otp: values.otp,
-				role: selectedRole.toLowerCase(),  // Use selectedRole instead of values.role
-			}),
-		});
-		if (!response.ok) {
-			const errorData = await response.json();
-			throw new Error(`Failed to verify OTP: ${errorData.error}`);
+		console.log('Selected role before API call:', selectedRole);
+		
+		try {
+			const response = await fetch('/api/verify-otp', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					phoneNumber: values.phoneNumber,
+					otp: values.otp,
+					role: selectedRole.toLowerCase(),
+				}),
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(`Failed to verify OTP: ${errorData.error}`);
+			}
+
+			const responseData = await response.json();
+			console.log('Verification response:', responseData);
+
+			// Store user data
+			localStorage.setItem('userRole', responseData.role);
+			localStorage.setItem('phoneNumber', values.phoneNumber);
+			
+			router.push('/');
+		} catch (error) {
+			console.error('Error during verification:', error);
+			throw error;
 		}
-
-		const responseData = await response.json();
-		console.log('Verification response:', responseData);
-
-		console.log('Sign-up successful. Role:', responseData.role);
-		localStorage.setItem('userRole', responseData.role);
-		router.push('/');
 	};
 
 	const handlePhoneVerified = (phoneNumber: string) => {
@@ -207,7 +221,7 @@ const SignUp: NextPage = () => {
 														formik.handleChange(e);
 														setSelectedRole(selectedValue);
 														localStorage.setItem('selectedRole', selectedValue);
-														console.log('Role selected:', selectedValue);  // Add this line
+														console.log('Role selected:', selectedValue);
 													}}
 													onBlur={formik.handleBlur}
 													value={selectedRole || formik.values.role}
@@ -224,7 +238,7 @@ const SignUp: NextPage = () => {
 											</FormGroup>
 										</div>
 										<div className='col-12'>
-											<PhoneVerification onVerified={handlePhoneVerified} />
+											<PhoneVerification onVerified={handlePhoneVerified} selectedRole={selectedRole} />
 										</div>
 										{showOtpInput && (
 											<div className='col-12'>

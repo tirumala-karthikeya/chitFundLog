@@ -10,26 +10,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       
-      const insertData = {
-        mobile_number: phoneNumber,
-        otp: otp,
-        role: role.toLowerCase(),
-        created_at: new Date().toISOString(),
-        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // OTP expires in 10 minutes
-      };
-      
-      console.log('Inserting data into Supabase:', insertData);
+      if (role && (role.toLowerCase() === 'owner' || role.toLowerCase() === 'participant')) {
+        const insertData = {
+          mobile_number: phoneNumber,
+          otp: otp,
+          role: role.toLowerCase(),
+          created_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // OTP expires in 10 minutes
+        };
+        
+        console.log('Inserting data into Supabase:', insertData);
 
-      const { data, error } = await supabase
-        .from('otp')
-        .insert(insertData);
+        const { data, error } = await supabase
+          .from('otp')
+          .insert(insertData);
 
-      if (error) {
-        console.error('Supabase error:', error);
-        throw error;
+        if (error) {
+          console.error('Supabase error:', error);
+          throw error;
+        }
+
+        console.log('OTP and role saved to Supabase:', data);
+      } else {
+        console.log('Invalid or missing role. OTP will be sent but not saved to database.');
       }
-
-      console.log('OTP and role saved to Supabase:', data);
 
       const twilioVerifySid = process.env.TWILIO_VERIFY_SID as string;
       await twilioClient.verify.v2.services(twilioVerifySid)
@@ -40,10 +44,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
 
       console.log('OTP sent successfully');
-      res.status(200).json({ message: 'OTP sent successfully', role: role.toLowerCase() });
+      res.status(200).json({ message: 'OTP sent successfully', role: role ? role.toLowerCase() : 'not specified' });
     } catch (error) {
       console.error('Error sending OTP:', error);
-      res.status(500).json({ error: 'Failed to send OTP' });
+      res.status(500).json({ error: 'Failed to send OTP', details: error instanceof Error ? error.message : String(error) });
     }
   } else {
     res.setHeader('Allow', ['POST']);
