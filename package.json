@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
+    "build-no-lint": "NODE_OPTIONS='--no-warnings' npm run build",
     "start": "next start",
     "lint": "next lint"
   },

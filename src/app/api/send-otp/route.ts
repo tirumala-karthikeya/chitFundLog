@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
     // Save OTP to Supabase
-    const { data, error } = await supabase.from('otp').insert({
+    const { error } = await supabase.from('otp').insert({
       mobile_number: phoneNumber,
       otp: otp,
       role: role?.toLowerCase(),

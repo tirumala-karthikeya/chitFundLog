@@ -11,7 +11,7 @@ export default function AuthLayout({ children }) {
   const router = useRouter()
 
   useEffect(() => {
-    supabase.auth.onAuthStateChange((event, session) => {
+    supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') {
         router.push('/auth/login')
       }

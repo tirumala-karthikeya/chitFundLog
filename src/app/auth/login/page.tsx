@@ -8,12 +8,8 @@
 
   const Login = () => {
     const router = useRouter();
-    const [isVerified, setIsVerified] = useState(false);
-    const [phoneNumber, setPhoneNumber] = useState("");
 
     const handleVerified = (phone: string) => {
-      setIsVerified(true);
-      setPhoneNumber(phone);
       localStorage.setItem("phoneNumber", phone);
       router.push("/");
     };
