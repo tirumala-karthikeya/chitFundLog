@@ -1,4 +1,3 @@
-// app/viewChit/singleChit/[chitId]/page.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -33,6 +32,7 @@ export default function ChitDetails({
   const [editedChit, setEditedChit] = useState<Chit | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [entries, setEntries] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchChit = async () => {
@@ -62,6 +62,26 @@ export default function ChitDetails({
       setIsLoading(false);
     });
   }, [params]);
+
+  useEffect(() => {
+    const fetchEntries = async () => {
+      const { data, error } = await supabase
+        .from("addentries")
+        .select("*")
+        .eq("chit_id", chit?.id);
+
+      if (error) {
+        console.error("Error fetching entries:", error.message);
+        setError("Error fetching entries");
+      } else {
+        setEntries(data);
+      }
+    };
+
+    if (chit) {
+      fetchEntries();
+    }
+  }, [chit]);
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -334,6 +354,47 @@ export default function ChitDetails({
                       Edit Details
                     </button>
                   </div>
+                  <div className="d-flex justify-content-center mt-4">
+                    <button
+                      className="btn btn-outline-primary"
+                      onClick={() => window.location.href = `/viewChit/singleChit/${chit.id}/addEntries`}
+                    >
+                      Add Entries
+                    </button>
+                  </div>
+                  {!isEditing && (
+                    <div className="mt-4">
+                      <h3>Entries</h3>
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th>Month Number</th>
+                            <th>Bid Amount</th>
+                            <th>Prize Amount</th>
+                            <th>Premium</th>
+                            <th>Dividend</th>
+                            <th>Paid Amount</th>
+                            <th>Select Status</th>
+                            <th>Paid On</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {entries.map((entry) => (
+                            <tr key={entry.id}>
+                              <td>{entry.monthnumber}</td>
+                              <td>{entry.bidamount}</td>
+                              <td>{entry.prizedamount}</td>
+                              <td>{entry.premium}</td>
+                              <td>{entry.dividend}</td>
+                              <td>{entry.paidamount}</td>
+                              <td>{entry.selectstatus}</td>
+                              <td>{new Date(entry.paidon).toLocaleDateString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
