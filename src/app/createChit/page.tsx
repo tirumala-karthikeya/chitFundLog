@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import "bootstrap/dist/css/bootstrap.min.css";
 
@@ -23,6 +23,22 @@ const CreateChit = () => {
 
   const [invitedUsers, setInvitedUsers] = useState<string[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
+
+  useEffect(() => {
+    if (formData.number_of_members > 0) {
+      setFormData((prev) => ({
+        ...prev,
+        contribution_amount: formData.total_chit_value / formData.number_of_members,
+        duration: formData.number_of_members, 
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        contribution_amount: 0, // Reset to 0 if no members
+        duration: 0, // Reset duration to 0 if no members
+      }));
+    }
+  }, [formData.total_chit_value, formData.number_of_members]); // Dependencies
 
   const handleChange = (
     e: React.ChangeEvent<

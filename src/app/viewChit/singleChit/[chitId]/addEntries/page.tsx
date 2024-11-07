@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 interface ChitData {
   id: number;
   chit_name: string;
-  total_chit_value: string;
+  contribution_amount: number;
   number_of_members: number;
   commission_percentage: string;
 }
@@ -22,6 +22,7 @@ interface AddEntryForm {
   paidamount: number;
   selectstatus: string;
   paidon: string;
+  amountPaid: number;
 }
 
 const AddEntriesForm = ({ params }: { params: Promise<{ chitId: string }> }) => {
@@ -43,7 +44,8 @@ const AddEntriesForm = ({ params }: { params: Promise<{ chitId: string }> }) => 
     dividend: 0,
     paidamount: 0,
     selectstatus: '',
-    paidon: new Date().toISOString().split('T')[0]
+    paidon: new Date().toISOString().split('T')[0],
+    amountPaid: 0
   });
 
   // Fetch chit data
@@ -70,24 +72,25 @@ const AddEntriesForm = ({ params }: { params: Promise<{ chitId: string }> }) => 
   useEffect(() => {
     if (!chitData) return;
 
-    const totalChitValue = parseFloat(chitData.total_chit_value);
-    const monthlyPremium = totalChitValue / chitData.number_of_members;
-    const commissionPercentage = parseFloat(chitData.commission_percentage) / 100;
-    const commissionAmount = totalChitValue * commissionPercentage;
-    const balanceAmount = totalChitValue * 0.35;
-    const prizedAmount = totalChitValue - balanceAmount;
-    
-    const dividend = (balanceAmount - commissionAmount) / chitData.number_of_members;
-    const paidAmount = monthlyPremium - dividend;
+    const totalChitAmount = chitData.number_of_members * chitData.contribution_amount;
+    const monthlyPremium = chitData.contribution_amount;
+
+    let commissionAmount = 0;
+    if (chitData.chit_name !== 'Owner Chit') {
+      commissionAmount = totalChitAmount * (parseFloat(chitData.commission_percentage) / 100);
+    }
+
+    const netDividend = (form.bidamount - commissionAmount)/ chitData.number_of_members;
+    const prizedAmount = totalChitAmount - (form.bidamount);
 
     setForm(prev => ({
       ...prev,
       premium: monthlyPremium,
-      dividend: dividend,
-      paidamount: paidAmount,
+      dividend: netDividend,
+      paidamount: monthlyPremium - netDividend,
       prizedamount: prizedAmount
     }));
-  }, [chitData]);
+  }, [chitData, form.bidamount]);
 
   const handleNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -134,21 +137,29 @@ const AddEntriesForm = ({ params }: { params: Promise<{ chitId: string }> }) => 
 
     setIsLoading(true);
     try {
-      const { error: supabaseError } = await supabase
-        .from('addentries')
-        .insert([{
-          chit_id: form.chit_id,
-          monthnumber: form.monthnumber,
-          bidamount: form.bidamount,
-          prizedamount: form.prizedamount,
-          premium: form.premium,
-          dividend: form.dividend,
-          paidamount: form.paidamount,
-          selectstatus: form.selectstatus,
-          paidon: form.paidon
-        }]);
+      const { data, error } = await supabase
+          .from('addentries')
+          .insert([{
+            chit_id: form.chit_id,
+            monthnumber: form.monthnumber,
+            bidamount: form.bidamount,
+            prizedamount: form.prizedamount,
+            premium: form.premium,
+            dividend: form.dividend,
+            paidamount: form.paidamount,
+            selectstatus: form.selectstatus,
+            paidon: form.paidon,
+            amountPaid: form.amountPaid
+          }]);
 
-      if (supabaseError) throw supabaseError;
+        if (error) {
+          console.error('Supabase Error:', error.message);
+          console.log('Error details:', error);
+          throw error; // Optional, depending on your flow
+        } else {
+          console.log('Data inserted:', data);
+        }
+
 
       setSuccess(true);
       router.back();
@@ -272,6 +283,18 @@ const AddEntriesForm = ({ params }: { params: Promise<{ chitId: string }> }) => 
               name="paidon"
               value={form.paidon}
               onChange={handleDateChange}
+            />
+          </div>
+
+          <div className="col-md-6">
+            <label htmlFor="amountPaid" className="form-label">Amount Paid</label>
+            <input
+              id="amountPaid"
+              type="number"
+              className="form-control"
+              name="amountPaid"
+              value={form.amountPaid || ''}
+              onChange={handleNumberChange}
             />
           </div>
         </div>

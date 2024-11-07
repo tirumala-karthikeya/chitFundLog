@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../../../../lib/supabase";
 import "bootstrap/dist/css/bootstrap.min.css";
+import { FaEdit, FaSave } from "react-icons/fa";
+
 
 interface Chit {
   id: number;
@@ -21,6 +23,20 @@ interface Chit {
   created_at: string;
   updated_at: string;
 }
+
+interface ChitEntry {
+  id: number;
+  monthnumber: number;
+  bidamount: number;
+  prizedamount: number;
+  premium: number;
+  dividend: number;
+  amountPaid: number;
+  selectstatus: string;
+  paidon: string;
+  isEditing?: boolean;
+}
+
 
 export default function ChitDetails({
   params,
@@ -109,6 +125,38 @@ export default function ChitDetails({
       }
     }
   };
+  const handleEditRow = (entryId: number) => {
+    setEntries((prevEntries) =>
+      prevEntries.map((entry) =>
+        entry.id === entryId ? { ...entry, isEditing: !entry.isEditing } : entry
+      )
+    );
+  };
+
+  const handleSaveRow = async (entry: ChitEntry) => {
+    const { id, isEditing, ...entryData } = entry;
+    const { error } = await supabase
+      .from("addentries")
+      .update(entryData)
+      .eq("id", id);
+
+    if (!error) {
+      setEntries((prevEntries) =>
+        prevEntries.map((e) =>
+          e.id === id ? { ...entry, isEditing: false } : e
+        )
+      );
+    }
+  };
+
+  const handleEntryChange = (entryId: number, field: string, value: any) => {
+    setEntries((prevEntries) =>
+      prevEntries.map((entry) =>
+        entry.id === entryId ? { ...entry, [field]: value } : entry
+      )
+    );
+  };
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -362,37 +410,66 @@ export default function ChitDetails({
                       Add Entries
                     </button>
                   </div>
+                  
                   {!isEditing && (
                     <div className="mt-4">
                       <h3>Entries</h3>
                       <table className="table">
-                        <thead>
-                          <tr>
-                            <th>Month Number</th>
-                            <th>Bid Amount</th>
-                            <th>Prize Amount</th>
-                            <th>Premium</th>
-                            <th>Dividend</th>
-                            <th>Paid Amount</th>
-                            <th>Select Status</th>
-                            <th>Paid On</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {entries.map((entry) => (
-                            <tr key={entry.id}>
-                              <td>{entry.monthnumber}</td>
-                              <td>{entry.bidamount}</td>
-                              <td>{entry.prizedamount}</td>
-                              <td>{entry.premium}</td>
-                              <td>{entry.dividend}</td>
-                              <td>{entry.paidamount}</td>
-                              <td>{entry.selectstatus}</td>
-                              <td>{new Date(entry.paidon).toLocaleDateString()}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                <thead>
+                  <tr>
+                    <th>Month Number</th>
+                    <th>Bid Amount</th>
+                    <th>Prize Amount</th>
+                    <th>Premium</th>
+                    <th>Dividend</th>
+                    <th>Paid Amount</th>
+                    <th>Select Status</th>
+                    <th>Paid On</th>
+                    <th>Edit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {entries.map((entry) => (
+                    <tr key={entry.id}>
+                      {entry.isEditing ? (
+                        <>
+                          <td><input value={entry.monthnumber} onChange={(e) => handleEntryChange(entry.id, "monthnumber", parseFloat(e.target.value))} /></td>
+                          <td><input value={entry.bidamount} onChange={(e) => handleEntryChange(entry.id, "bidamount", parseFloat(e.target.value))} /></td>
+                          <td><input value={entry.prizedamount} readOnly /></td>
+                          <td><input value={entry.premium} readOnly /></td>
+                          <td><input value={entry.dividend} readOnly /></td>
+                          <td><input value={entry.amountPaid} onChange={(e) => handleEntryChange(entry.id, "amountPaid", parseFloat(e.target.value))} /></td>
+                          <td>
+                            <select value={entry.selectstatus} onChange={(e) => handleEntryChange(entry.id, "selectstatus", e.target.value)}>
+                              <option value="Paid">Paid</option>
+                              <option value="Partially Paid">Partially Paid</option>
+                              <option value="Not Paid">Not Paid</option>
+                            </select>
+                          </td>
+                          <td><input type="date" value={new Date(entry.paidon).toISOString().split("T")[0]} onChange={(e) => handleEntryChange(entry.id, "paidon", e.target.value)} /></td>
+                              <td>
+                                <FaSave onClick={() => handleSaveRow(entry)} style={{ cursor: "pointer", color: "green" }} />
+                              </td>
+                        </>
+                      ) : (
+                        <>
+                          <td>{entry.monthnumber}</td>
+                          <td>{entry.bidamount}</td>
+                          <td>{entry.prizedamount}</td>
+                          <td>{entry.premium}</td>
+                          <td>{entry.dividend}</td>
+                          <td>{entry.amountPaid}</td>
+                          <td>{entry.selectstatus}</td>
+                          <td>{new Date(entry.paidon).toLocaleDateString()}</td>
+                          <td>
+                            <FaEdit onClick={() => handleEditRow(entry.id)} style={{ cursor: "pointer", color: "blue" }} />
+                          </td>
+                        </>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
                     </div>
                   )}
                 </div>
